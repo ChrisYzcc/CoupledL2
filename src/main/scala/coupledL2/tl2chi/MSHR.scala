@@ -20,7 +20,7 @@ package coupledL2.tl2chi
 import chisel3._
 import chisel3.util._
 import coupledL2.MetaData._
-import utility.{MemReqSource, ParallelLookUp, ParallelMux, ParallelPriorityMux}
+import utility.{MemReqSource, ParallelLookUp, ParallelMux, ParallelPriorityMux, XSPerfAccumulate}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink.TLPermissions._
@@ -119,6 +119,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       Cat( true.B, TRUNK) -> UD,
       Cat( true.B, TIP)   -> UD
     ))
+  val dat_rsvdc = RegInit(0.U(DAT_RSVDC_WIDTH.W))
 
   io.pCrd.query.valid := gotRetryAck && !gotPCrdGrant
   io.pCrd.query.bits.pCrdType := pcrdtype
@@ -151,6 +152,8 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
     backoffTimer := 0.U
 
     req_writeEvictOrEvict := false.B
+
+    dat_rsvdc := 0.U
   }
 
   /* ======== Enchantment ======== */
@@ -807,6 +810,8 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       accessed = true.B
     )
 
+    mp_grant.dat_rsvdc.get := dat_rsvdc
+
     mp_grant
   }
 
@@ -1127,6 +1132,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       gotDirty := gotDirty || rxdatIsU_PD
       gotGrantData := true.B
       dbid := rxdat.bits.dbID.getOrElse(0.U)
+      dat_rsvdc := rxdat.bits.dat_rsvdc.getOrElse(0.U)
       homenid := rxdat.bits.homeNID.getOrElse(0.U)
       denied := denied || nderr
       corrupt := corrupt || derr || nderr || rxdatCorrupt

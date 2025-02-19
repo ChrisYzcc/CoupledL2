@@ -61,6 +61,10 @@ case class VaddrField(width: Int) extends BundleField[UInt](VaddrKey, Output(UIn
 case object IsKeywordKey extends ControlKey[Bool]("isKeyword")
 case class IsKeywordField() extends BundleField[Bool](IsKeywordKey, Output(Bool()), _ := false.B)
 
+// Pass whether is offchip access to upper level cache
+case object IsOffchipKey extends ControlKey[Bool]("isOffchip")
+case class IsOffchipField() extends BundleField[Bool](IsOffchipKey, Output(Bool()), _ := false.B)
+
 case class L2Param(
   name: String = "L2",
   ways: Int = 4,
@@ -85,7 +89,7 @@ case class L2Param(
   respKey: Seq[BundleKeyBase] = Seq(IsHitKey),
   // Manager
   reqKey: Seq[BundleKeyBase] = Seq(AliasKey, VaddrKey, PrefetchKey, ReqSourceKey),
-  respField: Seq[BundleFieldBase] = Nil,
+  respField: Seq[BundleFieldBase] = Seq(IsOffchipField()),
 
   innerBuf: TLBufferParams = TLBufferParams(),
   outerBuf: TLBufferParams = TLBufferParams(
