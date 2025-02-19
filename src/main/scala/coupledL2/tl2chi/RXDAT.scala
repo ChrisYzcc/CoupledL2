@@ -82,7 +82,9 @@ class RXDAT(implicit p: Parameters) extends TL2CHIL2Module {
   io.in.respInfo.traceTag.get     := io.out.bits.traceTag
   io.in.respInfo.corrupt          := io.out.bits.respErr === RespErrEncodings.DERR || io.out.bits.respErr === RespErrEncodings.NDERR || dataCheck || poison
   io.in.respInfo.dataCheckErr.get := dataCheck
+  io.in.respInfo.dat_rsvdc.get    := io.out.bits.rsvdc
 
   io.out.ready := true.B
 
+  XSPerfAccumulate("l2_rsvdc_recv", io.out.fire && io.out.bits.rsvdc === DAT_RSVDC_OFFCHIP)
 }

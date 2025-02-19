@@ -143,6 +143,11 @@ class TaskBundle(implicit p: Parameters) extends L2Bundle
   val allowRetry = chiOpt.map(_ => Bool())
   val memAttr = chiOpt.map(_ => new MemAttr)
   val traceTag = chiOpt.map(_ => Bool())
+  val dat_rsvdc = chiOpt.map(_ => UInt(DAT_RSVDC_WIDTH.W))
+
+  def isOffchip(): Bool = {
+    dat_rsvdc.get === DAT_RSVDC_OFFCHIP
+  }
   val dataCheckErr = chiOpt.map(_ => Bool())
 
   def toCHIREQBundle(): CHIREQ = {
@@ -249,6 +254,7 @@ class RespInfoBundle(implicit p: Parameters) extends L2Bundle
   val pCrdType = chiOpt.map(_ => UInt(PCRDTYPE_WIDTH.W))
   val respErr = chiOpt.map(_ => UInt(RESPERR_WIDTH.W))
   val traceTag = chiOpt.map(_ => Bool())
+  val dat_rsvdc = chiOpt.map(_ => UInt(DAT_RSVDC_WIDTH.W))
   val dataCheckErr = chiOpt.map(_ => Bool())
 }
 

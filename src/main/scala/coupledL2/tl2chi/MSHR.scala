@@ -20,7 +20,7 @@ package coupledL2.tl2chi
 import chisel3._
 import chisel3.util._
 import coupledL2.MetaData._
-import utility.{MemReqSource, ParallelLookUp, ParallelMux, ParallelPriorityMux}
+import utility.{MemReqSource, ParallelLookUp, ParallelMux, ParallelPriorityMux, XSPerfAccumulate}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
 import freechips.rocketchip.tilelink.TLPermissions._
@@ -104,7 +104,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
   val tgtid_wcompack = Reg(UInt(NODEID_WIDTH.W)) // TgtID in WriteData / CompAck of write transactions
   val txnid_wcompack = Reg(UInt(TXNID_WIDTH.W)) // TxnID in WriteData / CompAck of write transactions
   val srcid_retryack = Reg(UInt(NODEID_WIDTH.W)) // SrcID in RetryAck, only used for protocol retry
-  
+
   val pcrdtype = RegInit(0.U(PCRDTYPE_WIDTH.W))
   val gotRetryAck = RegInit(false.B)
   val gotPCrdGrant = RegInit(false.B)
@@ -122,6 +122,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       Cat( true.B, TRUNK) -> UD,
       Cat( true.B, TIP)   -> UD
     ))
+  val dat_rsvdc = RegInit(0.U(DAT_RSVDC_WIDTH.W))
 
   io.pCrd.query.valid := gotRetryAck && !gotPCrdGrant
   io.pCrd.query.bits.pCrdType := pcrdtype
@@ -154,6 +155,8 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
     backoffTimer := 0.U
 
     req_writeEvictOrEvict := false.B
+
+    dat_rsvdc := 0.U
   }
 
   /* ======== Enchantment ======== */
@@ -221,7 +224,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       (isSnpToBNonFwd(req_chiOpcode) || isSnpToNNonFwd(req_chiOpcode) || isSnpOnce(req_chiOpcode)) ||
     hitWriteEvict &&
        isSnpOnce(req_chiOpcode))
-  // doRespData_once includes 
+  // doRespData_once includes
   //  1. SnpOnceFwd : UD -> I     (nesting WriteBack)
   //  2. SnpOnceFwd : UD -> SC    (nesting WriteClean)
   //  3. SnpOnce    : UC -> UC    (non-nesting)
@@ -835,6 +838,8 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
     // CHI
     mp_grant.dataCheckErr.get := dataCheckErr
 
+    mp_grant.dat_rsvdc.get := dat_rsvdc
+
     mp_grant
   }
 
@@ -1159,6 +1164,7 @@ class MSHR(implicit p: Parameters) extends TL2CHIL2Module with HasCHIOpcodes {
       txnid_rcompack := rxdat.bits.dbID.getOrElse(0.U)
       // The TgtID of CompAck is set to the same value as the HomeNID of the read data.
       tgtid_rcompack := rxdat.bits.homeNID.getOrElse(0.U)
+      dat_rsvdc := rxdat.bits.dat_rsvdc.getOrElse(0.U)
       denied := denied || nderr
       corrupt := corrupt || derr || nderr || rxdatCorrupt
       dataCheckErr := dataCheckErr || rxdat.bits.dataCheckErr.getOrElse(false.B)
