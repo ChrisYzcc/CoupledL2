@@ -33,6 +33,7 @@ class TXREQ(implicit p: Parameters) extends TL2CHIL2Module {
   val io = IO(new Bundle() {
     val pipeReq = Flipped(DecoupledIO(new CHIREQ()))
     val mshrReq = Flipped(DecoupledIO(new CHIREQ()))
+    val llc_pftReq = Flipped(DecoupledIO(new CHIREQ()))
     val out = DecoupledIO(new CHIREQ())
 
     val pipeStatusVec = Flipped(Vec(5, ValidIO(new PipeStatusWithCHI)))
@@ -75,8 +76,12 @@ class TXREQ(implicit p: Parameters) extends TL2CHIL2Module {
   io.mshrReq.ready := !io.pipeReq.valid && !noSpace
 
   // Decoupled2LCredit(queue.io.deq, io.out)
-  io.out <> queue.io.deq
+  io.out.valid  := queue.io.deq.valid || io.llc_pftReq.valid
+  io.out.bits   := Mux(queue.io.deq.valid, queue.io.deq.bits, io.llc_pftReq.bits)
   io.out.bits.tgtID := SAM(sam).lookup(io.out.bits.addr)
-  io.out.bits.size := log2Ceil(blockBytes).U(SIZE_WIDTH.W) // TODO
-  io.out.bits.addr := restoreAddressUInt(queue.io.deq.bits.addr, io.sliceId)
+  io.out.bits.size  := log2Ceil(blockBytes).U(SIZE_WIDTH.W) // TODO
+  io.out.bits.addr  := Mux(queue.io.deq.valid, restoreAddressUInt(queue.io.deq.bits.addr, io.sliceId), restoreAddressUInt(io.llc_pftReq.bits.addr, io.sliceId))
+
+  queue.io.deq.ready  := io.out.ready
+  io.llc_pftReq.ready := !queue.io.deq.valid && io.out.ready
 }

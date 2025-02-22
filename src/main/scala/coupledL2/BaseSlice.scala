@@ -22,7 +22,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink.TLBundle
 import utility._
-import coupledL2.prefetch.PrefetchIO
+import coupledL2.prefetch.{PrefetchIO, PrefetchReq}
 
 trait BaseOuterBundle
 
@@ -41,4 +41,5 @@ abstract class BaseSliceIO[T_OUT <: BaseOuterBundle](implicit p: Parameters) ext
 
 abstract class BaseSlice[T_OUT <: BaseOuterBundle](implicit p: Parameters) extends L2Module with HasPerfEvents {
   val io: BaseSliceIO[T_OUT]
+  val io_llc_pft = IO(Flipped(Decoupled(new PrefetchReq)))
 }

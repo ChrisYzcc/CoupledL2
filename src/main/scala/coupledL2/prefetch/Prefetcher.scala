@@ -243,6 +243,9 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   val vbop_en = pfCtrlFromCore.l2_pf_master_en && pfCtrlFromCore.l2_vbop_en
   val tp_en = pfCtrlFromCore.l2_pf_master_en && pfCtrlFromCore.l2_tp_en
 
+  val io_llc_pft_recv = IO(Flipped(ValidIO(UInt(64.W))))
+  val io_llc_pft_send = IO(Decoupled(new PrefetchReq()))
+
   // =================== Prefetchers =====================
   // TODO: consider separate VBOP and PBOP in prefetch param
   val pbop = if (hasBOP) Some(
@@ -346,6 +349,8 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   val pftQueue = Module(new PrefetchQueue)
   val pipe = Module(new Pipeline(io.req.bits.cloneType, 1))
 
+  val llc_pftQueue = Module(new PrefetchQueue)
+
   pftQueue.io.enq.valid :=
     (if (hasReceiver)     pfRcv.get.io.req.valid                         else false.B) ||
     (if (hasBOP)          vbop.get.io.req.valid || pbop.get.io.req.valid else false.B) ||
@@ -356,6 +361,13 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     if (hasBOP)          pbop.get.io.req.valid -> pbop.get.io.req.bits   else false.B -> 0.U.asTypeOf(io.req.bits),
     if (hasTPPrefetcher) tp.get.io.req.valid -> tp.get.io.req.bits       else false.B -> 0.U.asTypeOf(io.req.bits)
   ))
+
+  llc_pftQueue.io.enq.valid := io_llc_pft_recv.valid
+  llc_pftQueue.io.enq.bits  := DontCare
+  llc_pftQueue.io.enq.bits.tag  := parseFullAddress(io_llc_pft_recv.bits)._1
+  llc_pftQueue.io.enq.bits.set  := parseFullAddress(io_llc_pft_recv.bits)._2
+
+  llc_pftQueue.io.deq <> io_llc_pft_send
 
   pipe.io.in <> pftQueue.io.deq
   io.req <> pipe.io.out
@@ -378,6 +390,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   XSPerfAccumulate("prefetch_req_selectTP", hasTPReq && !hasReceiverReq && !hasVBOPReq && !hasPBOPReq)
   XSPerfAccumulate("prefetch_req_SMS_other_overlapped",
     hasReceiverReq && (hasVBOPReq || hasPBOPReq || hasTPReq))
+  XSPerfAccumulate("prefetch_req_to_llc", io_llc_pft_recv.valid)
 
   // NOTE: set basicDB false when debug over
   // TODO: change the enable signal to not target the BOP

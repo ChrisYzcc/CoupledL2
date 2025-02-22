@@ -241,6 +241,8 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
   val pf_recv_node: Option[BundleBridgeSink[PrefetchRecv]] =
     if(hasReceiver) Some(BundleBridgeSink(Some(() => new PrefetchRecv))) else None
 
+  val llc_pf_recv_node: Option[BundleBridgeSink[PrefetchRecv]] = Some(BundleBridgeSink(Some(() => new PrefetchRecv)))
+
   val managerPortParams = (m: TLSlavePortParameters) => TLSlavePortParameters.v1(
     m.managers.map { m =>
       m.v2copy(
@@ -354,6 +356,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
     val prefetchTrains = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchTrain()(pftParams)))))
     val prefetchResps = prefetchOpt.map(_ => Wire(Vec(banks, DecoupledIO(new PrefetchResp()(pftParams)))))
     val prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
+    val llc_prefetchReqsReady = WireInit(VecInit(Seq.fill(banks)(false.B)))
     io.l2_tlb_req <> DontCare // TODO: l2_tlb_req should be Option
     prefetchOpt.foreach {
       _ =>
@@ -363,6 +366,7 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
         prefetcher.get.pfCtrlFromCore := io.pfCtrlFromCore
         fastArb(prefetchResps.get, prefetcher.get.io.resp, Some("prefetch_resp"))
         prefetcher.get.io.tlb_req <> io.l2_tlb_req
+        prefetcher.get.io_llc_pft_send.ready  := Cat(llc_prefetchReqsReady).orR
     }
     pf_recv_node match {
       case Some(x) =>
@@ -375,6 +379,9 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
             p.io.recv_addr := 0.U.asTypeOf(p.io.recv_addr)
         }
     }
+    prefetcher.get.io_llc_pft_recv.valid := llc_pf_recv_node.get.in.head._1.addr_valid
+    prefetcher.get.io_llc_pft_recv.bits := llc_pf_recv_node.get.in.head._1.addr
+
     tpmeta_source_node match {
       case Some(x) =>
         x.out.head._1 <> prefetcher.get.tpio.tpmeta_port.get.req
@@ -468,6 +475,18 @@ abstract class CoupledL2Base(implicit p: Parameters) extends LazyModule with Has
             s.tlb_req.req.bits := DontCare
             s.tlb_req.req_kill := DontCare
             s.tlb_req.resp.ready := true.B
+        }
+
+        if (enableCHI){
+          val chi_slice = slice
+          val p = prefetcher.get
+          chi_slice.io_llc_pft.valid  := p.io_llc_pft_send.valid && bank_eq(p.io_llc_pft_send.bits.set, i, bankBits)
+          chi_slice.io_llc_pft.bits   := p.io_llc_pft_send.bits
+          llc_prefetchReqsReady(i)    := chi_slice.io_llc_pft.ready && bank_eq(p.io_llc_pft_send.bits.set, i, bankBits)
+        }
+        else{
+          val chi_slice = slice
+          chi_slice.io_llc_pft  <> DontCare
         }
 
         slice

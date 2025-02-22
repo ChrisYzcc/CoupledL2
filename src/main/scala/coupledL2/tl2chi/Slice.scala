@@ -22,7 +22,7 @@ import chisel3.util._
 import utility.mbist.MbistPipeline
 import org.chipsalliance.cde.config.Parameters
 import coupledL2._
-import coupledL2.prefetch.PrefetchIO
+import coupledL2.prefetch.{PrefetchIO, PrefetchReq}
 
 class OuterBundle(implicit p: Parameters) extends DecoupledPortIO with BaseOuterBundle
 
@@ -59,6 +59,8 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   val mainPipe = Module(new MainPipe())
   val reqBuf = Module(new RequestBuffer())
   val mshrCtl = Module(new MSHRCtl())
+  val llcTran = Module(new LLCPrefetchTranlator())
+
   private val mbistPl = MbistPipeline.PlaceMbistPipeline(2, "L2Slice", p(L2ParamKey).hasMbist)
   sinkC.io.msInfo := mshrCtl.io.msInfo
 
@@ -175,6 +177,9 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
     p.tlb_req.pmp_resp := DontCare
     p.recv_addr := 0.U.asTypeOf(p.recv_addr)
   }
+
+  llcTran.io.in_pft_req <> io_llc_pft
+  llcTran.io.out_chi_req <> txreq.io.llc_pftReq
 
   /* IO Connection */
   io.l1Hint <> mainPipe.io.l1Hint
